@@ -108,7 +108,6 @@ export const useMapState = (users: User[]) => {
   return {
     // State
     viewport,
-    setViewport,
     defaultIcon,
     selectedIcon,
     followedUser,
@@ -117,6 +116,7 @@ export const useMapState = (users: User[]) => {
     searchResults,
     showSearchResults,
     // Actions
+    setViewport,
     handleSearch,
     handleSelectUser,
     handleMarkerClick,

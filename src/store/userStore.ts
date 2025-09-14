@@ -19,8 +19,11 @@ const SURABAYA_BOUNDS = {
 // Constants for speed calculation
 const UPDATE_INTERVAL = 1000; // milliseconds
 const EARTH_RADIUS = 6371; // Earth's radius in kilometers
-const MIN_SPEED = 20; // Minimum speed in km/h (walking/cycling)
-const MAX_SPEED = 60; // Maximum speed in km/h (city driving)
+const MIN_SPEED = 0; // Minimum speed in km/h
+const MAX_SPEED = 80; // Maximum speed in km/h
+
+// Path following constants
+const PATH_SMOOTHNESS = 0.00001;
 
 // Function to calculate distance between two points using Haversine formula
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -39,13 +42,45 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return EARTH_RADIUS * c; // Distance in kilometers
 };
 
-// Calculate movement based on desired speed (km/h)
-const calculateMovement = (speed: number) => {
-  // Convert speed from km/h to km/s
-  const speedKmPerSecond = speed / 3600;
-  // Calculate approximate degree change for the given speed
-  // At the equator, 1 degree is approximately 111 kilometers
-  return (speedKmPerSecond / 111) * (UPDATE_INTERVAL / 1000);
+
+// Generate a random destination within bounds
+const generateRandomDestination = () => {
+  const destLat = generateRandomInRange(SURABAYA_BOUNDS.south, SURABAYA_BOUNDS.north);
+  const destLng = generateRandomInRange(SURABAYA_BOUNDS.west, SURABAYA_BOUNDS.east);
+
+  return { destLat, destLng };
+};
+
+// Generate a simple path with
+const generatePath = (startLat: number, startLng: number, endLat: number, endLng: number) => {
+  // Create 1 random waypoint between start and end
+  const t = 0.5; // Middle point
+  const lat = startLat + (endLat - startLat) * t;
+  const lng = startLng + (endLng - startLng) * t;
+
+  // Add random variation
+  const randomLat = lat + (Math.random() - 0.5) * PATH_SMOOTHNESS;
+  const randomLng = lng + (Math.random() - 0.5) * PATH_SMOOTHNESS;
+
+  return [
+    { lat: startLat, lng: startLng },
+    {
+      lat: Math.max(SURABAYA_BOUNDS.south, Math.min(SURABAYA_BOUNDS.north, randomLat)),
+      lng: Math.max(SURABAYA_BOUNDS.west, Math.min(SURABAYA_BOUNDS.east, randomLng))
+    },
+  ];
+};
+
+// Interpolate position along path
+const interpolateAlongPath = (waypoints: Array<{ lat: number, lng: number }>, progress: number) => {
+  const current = waypoints[0];
+  const next = waypoints[1];
+
+  // interpolation between waypoints
+  const lat = current.lat + (next.lat - current.lat) * progress;
+  const lng = current.lng + (next.lng - current.lng) * progress;
+
+  return { lat, lng };
 };
 
 export const customFaker = new Faker({
@@ -60,46 +95,66 @@ export const useUserStore = create<UserStore>((set) => ({
   users: [],
 
   generateUsers: (count) => {
-    const newUsers: User[] = Array.from({ length: count }, () => ({
-      id: customFaker.string.uuid(),
-      name: customFaker.person.fullName(),
-      latitude: generateRandomInRange(SURABAYA_BOUNDS.south, SURABAYA_BOUNDS.north),
-      longitude: generateRandomInRange(SURABAYA_BOUNDS.west, SURABAYA_BOUNDS.east),
-      speed: customFaker.number.float({ min: MIN_SPEED, max: MAX_SPEED }) // Speed in km/h
-    }));
+    const newUsers: User[] = Array.from({ length: count }, () => {
+      // Generate starting position
+      const startLat = generateRandomInRange(SURABAYA_BOUNDS.south, SURABAYA_BOUNDS.north);
+      const startLng = generateRandomInRange(SURABAYA_BOUNDS.west, SURABAYA_BOUNDS.east);
+
+      // Generate destination
+      const { destLat, destLng } = generateRandomDestination();
+
+      return {
+        id: customFaker.string.uuid(),
+        name: customFaker.person.fullName(),
+        latitude: startLat,
+        longitude: startLng,
+        speed: customFaker.number.float({ min: MIN_SPEED, max: MAX_SPEED }),
+        startLatitude: startLat,
+        startLongitude: startLng,
+        endLatitude: destLat,
+        endLongitude: destLng,
+        pathProgress: 0,
+      };
+    });
 
     set({ users: newUsers });
   },
 
-  // simulate user movement from socket
+  // simulate user movement from socket.io
   updateUserLocations: () => {
     set((state) => ({
       users: state.users.map((user) => {
-        // Calculate movement based on speed
-        const movement = calculateMovement(user.speed);
+        // If reached destination, generate new path
+        if (user.pathProgress >= 1) {
+          const { destLat, destLng } = generateRandomDestination();
+          return {
+            ...user,
+            startLatitude: user.latitude,
+            startLongitude: user.longitude,
+            endLatitude: destLat,
+            endLongitude: destLng,
+            pathProgress: 0,
+          };
+        }
 
-        // Random direction with smooth turns
-        const angle = Math.random() * 2 * Math.PI;
-        const latMove = movement * Math.cos(angle);
-        const lngMove = movement * Math.sin(angle);
+        // Random Speed
+        const speed = Math.floor(Math.random() * (MAX_SPEED - MIN_SPEED + 1) + MIN_SPEED);
 
-        // Calculate new positions
-        let newLat = user.latitude + latMove;
-        let newLng = user.longitude + lngMove;
+        // Calculate movement
+        const totalDistance = calculateDistance(user.startLatitude, user.startLongitude, user.endLatitude, user.endLongitude);
+        const progressIncrement = (speed / 3600) * (UPDATE_INTERVAL / 1000) / totalDistance;
+        const newProgress = Math.min(1, user.pathProgress + progressIncrement);
 
-        // Keep within bounds
-        newLat = Math.max(SURABAYA_BOUNDS.south, Math.min(SURABAYA_BOUNDS.north, newLat));
-        newLng = Math.max(SURABAYA_BOUNDS.west, Math.min(SURABAYA_BOUNDS.east, newLng));
-
-        // Calculate actual speed based on the distance traveled
-        const distanceKm = calculateDistance(user.latitude, user.longitude, newLat, newLng);
-        const actualSpeedKmH = (distanceKm * 3600) / (UPDATE_INTERVAL / 1000);
+        // Get new position
+        const waypoints = generatePath(user.startLatitude, user.startLongitude, user.endLatitude, user.endLongitude);
+        const newPosition = interpolateAlongPath(waypoints, newProgress);
 
         return {
           ...user,
-          latitude: newLat,
-          longitude: newLng,
-          speed: actualSpeedKmH // Update speed to actual calculated speed
+          speed: speed,
+          latitude: newPosition.lat,
+          longitude: newPosition.lng,
+          pathProgress: newProgress,
         };
       })
     }));

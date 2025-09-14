@@ -4,12 +4,12 @@ import { useEffect } from "react";
 import { useMap } from "react-leaflet";
 import type { Viewport } from "@/types/user";
 
-interface MapControllerProps {
+interface UseMapControllerProps {
   setViewport: (v: Viewport) => void;
   isFollowing: boolean;
 }
 
-const MapController = ({ setViewport, isFollowing }: MapControllerProps) => {
+export const useMapController = ({ setViewport, isFollowing }: UseMapControllerProps) => {
   const map = useMap();
 
   useEffect(() => {
@@ -33,8 +33,4 @@ const MapController = ({ setViewport, isFollowing }: MapControllerProps) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, isFollowing]);
-
-  return null;
 };
-
-export default MapController;

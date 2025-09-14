@@ -5,15 +5,15 @@ import { useMap } from "react-leaflet";
 import L from "leaflet";
 import type { User } from "@/types/user";
 
-interface FollowControllerProps {
+interface UseFollowControllerProps {
   followedUser: User | null;
   isFollowing: boolean;
 }
 
-const FollowController = ({
+export const useFollowController = ({
   followedUser,
   isFollowing,
-}: FollowControllerProps) => {
+}: UseFollowControllerProps) => {
   const map = useMap();
 
   useEffect(() => {
@@ -26,8 +26,4 @@ const FollowController = ({
       );
     }
   }, [map, followedUser, isFollowing]);
-
-  return null;
 };
-
-export default FollowController;

@@ -1,26 +1,40 @@
 "use client";
 
 import { MapContainer, TileLayer } from "react-leaflet";
-import type { User } from "@/types/user";
+import type { User, Viewport } from "@/types/user";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
 // Import components
-import MapController from "./MapController";
-import FollowController from "./FollowController";
 import StatusBar from "./StatusBar";
 import SearchBar from "./SearchBar";
 import UserMarker from "./UserMarker";
 import { useMapState } from "../hooks/useMapState";
+import { useMapController } from "../hooks/useMapController";
+import { useFollowController } from "../hooks/useFollowController";
 
 interface MapContentProps {
   users: User[];
 }
 
+// Component that uses the hooks inside MapContainer
+const MapLogic = ({
+  setViewport,
+  isFollowing,
+  followedUser,
+}: {
+  setViewport: (v: Viewport) => void;
+  isFollowing: boolean;
+  followedUser: User | null;
+}) => {
+  useMapController({ setViewport, isFollowing });
+  useFollowController({ followedUser, isFollowing });
+  return null;
+};
+
 const MapContent = ({ users }: MapContentProps) => {
   const {
     viewport,
-    setViewport,
     defaultIcon,
     selectedIcon,
     followedUser,
@@ -28,6 +42,7 @@ const MapContent = ({ users }: MapContentProps) => {
     searchQuery,
     searchResults,
     showSearchResults,
+    setViewport,
     handleSearch,
     handleSelectUser,
     handleMarkerClick,
@@ -65,10 +80,10 @@ const MapContent = ({ users }: MapContentProps) => {
           style={{ width: "100%", height: "100%" }}
           scrollWheelZoom={true}
         >
-          <MapController setViewport={setViewport} isFollowing={isFollowing} />
-          <FollowController
-            followedUser={followedUser}
+          <MapLogic
+            setViewport={setViewport}
             isFollowing={isFollowing}
+            followedUser={followedUser}
           />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
